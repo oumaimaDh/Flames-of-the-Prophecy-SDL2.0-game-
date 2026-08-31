@@ -2,7 +2,7 @@
 Flames of the Prophecy
 Reclaim the Hourglass of Time and restore the forgotten magic of Tunisia in this fast-paced 2D action and puzzle game.
 
-(Note: This repository serves as a technical showcase and architectural archive of a first-year C/SDL project developed natively on Linux Ubuntu. Some asset files are missing, but the core systems documented below demonstrate the engine's capabilities).![Uploading Capture 6.png…]()
+(Note: This repository serves as a technical showcase and architectural archive of a first-year C/SDL project developed natively on Linux Ubuntu. Some asset files are missing, but the core systems documented below demonstrate the engine's capabilities).
 
 
 <img width="1365" height="787" alt="Capture 4" src="https://github.com/user-attachments/assets/4570fc3d-4cdf-46dd-9663-27b8929deb47" />
