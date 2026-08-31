@@ -1,25 +1,24 @@
+# Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -g `sdl-config --cflags`
-LDFLAGS = `sdl-config --libs` -lSDL_image -lSDL_ttf -lSDL_mixer -lm
-SRC = main.c ennemi.c
+CFLAGS = -Wall -Wextra -g $(shell sdl-config --cflags)
+LDFLAGS = $(shell sdl-config --libs) -lSDL_image -lSDL_mixer -lSDL_ttf -lm
+
+# Sources and output
+SRC = main.c source.c
 OBJ = $(SRC:.c=.o)
 EXEC = game
 
+# Default target
 all: $(EXEC)
 
 $(EXEC): $(OBJ)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 %.o: %.c
-	$(CC) -o $@ -c $< $(CFLAGS)
+	$(CC) -c $< -o $@ $(CFLAGS)
 
 clean:
 	rm -f $(OBJ) $(EXEC)
 
 re: clean all
-
-
-
-
-
 
