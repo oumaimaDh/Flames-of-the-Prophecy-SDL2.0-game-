@@ -1,20 +1,22 @@
 CC = gcc
-CFLAGS = -Wall
-LDFLAGS = -lSDL -lSDL_image -lSDL_gfx
+CFLAGS = -Wall -Wextra -g `sdl-config --cflags`
+LDFLAGS = `sdl-config --libs` -lSDL_image -lSDL_ttf -lSDL_mixer -lm
+SRC = main.c ennemi.c
+OBJ = $(SRC:.c=.o)
+EXEC = game
 
-SRC = main.c
-EXEC = mygamesss
+all: $(EXEC)
 
-all:
-	$(CC) $(CFLAGS) $(SRC) -o $(EXEC) $(LDFLAGS)
+$(EXEC): $(OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) -o $@ -c $< $(CFLAGS)
 
 clean:
-	rm -f $(EXEC)
+	rm -f $(OBJ) $(EXEC)
 
-
-
-
-
+re: clean all
 
 
 

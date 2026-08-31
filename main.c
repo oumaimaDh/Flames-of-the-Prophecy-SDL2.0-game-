@@ -1,119 +1,216 @@
+#include "ennemi.h"
 #include <SDL/SDL.h>
+#include <SDL/SDL_ttf.h>
 #include <SDL/SDL_image.h>
-#include <SDL/SDL_rotozoom.h> // SDL_gfx for scaling
+#include <SDL/SDL_mixer.h> // Added for audio
+#include <stdlib.h>
+#include <time.h>
 
-int main(int argc, char* args[]) {
-    // Variables
-    SDL_Surface* screen = NULL;
-    SDL_Surface* background = NULL;
-    SDL_Surface* logo = NULL;
-    SDL_Surface* buttonPlay = NULL;
-    SDL_Surface* buttonOptions = NULL;
-    SDL_Surface* buttonScores = NULL;
-    SDL_Surface* buttonQuit = NULL;
-    
-    SDL_Rect buttonPlayRect, buttonOptionsRect, buttonScoresRect, buttonQuitRect, logoRect;
-    
-    const int SCREEN_WIDTH = 800;
-    const int SCREEN_HEIGHT = 600;
-    int quit = 0;
+#define MOVE_SPEED 14
+#define ANIMATION_INTERVAL 150
+#define HURT_ANIMATION_INTERVAL 70
+#define DEATH_ANIMATION_INTERVAL 40
 
-    // Initialisation SDL
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        printf("Error: %s\n", SDL_GetError());
+int main(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
+    SDL_Surface *background = NULL;
+    Mix_Chunk *hitSound = NULL; // Sound effect for weapon hit
+
+    srand(time(NULL));
+
+    // Initialize SDL video, TTF, IMG, and audio
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0 || TTF_Init() < 0 || IMG_Init(IMG_INIT_PNG) < 0) {
+        printf("Initialization Error: %s\n", SDL_GetError());
         return 1;
     }
 
-    screen = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, 32, SDL_SWSURFACE);
+    // Initialize SDL_mixer
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+        printf("SDL_mixer init error: %s\n", Mix_GetError());
+        SDL_Quit();
+        TTF_Quit();
+        IMG_Quit();
+        return 1;
+    }
+
+    SDL_Surface *screen = SDL_SetVideoMode(800, 600, 32, SDL_SWSURFACE);
     if (screen == NULL) {
-        printf("Error: %s\n", SDL_GetError());
+        printf("Error creating window: %s\n", SDL_GetError());
+        SDL_Quit();
+        TTF_Quit();
+        IMG_Quit();
+        Mix_CloseAudio();
         return 1;
     }
 
-    // Chargement des médias
-    background = IMG_Load("bg1.png");
+    // Load font
+    TTF_Font *font = TTF_OpenFont("text.ttf", 24);
+    if (!font) {
+        printf("Error loading font: %s\n", TTF_GetError());
+        SDL_Quit();
+        TTF_Quit();
+        IMG_Quit();
+        Mix_CloseAudio();
+        return 1;
+    }
+
+    // Load background
+    background = IMG_Load("bg.png");
     if (background == NULL) {
-        printf("Error loading background: %s\n", IMG_GetError());
-        return 1;
-    }
-    background = SDL_ConvertSurface(background, screen->format, 0);
-    
-    logo = IMG_Load("logor.png");
-    if (logo == NULL) {
-        printf("Error loading logo: %s\n", IMG_GetError());
+        printf("Unable to load background: %s\n", IMG_GetError());
+        SDL_Quit();
+        TTF_Quit();
+        IMG_Quit();
+        Mix_CloseAudio();
         return 1;
     }
 
-    buttonPlay = IMG_Load("startr.png");
-    if (buttonPlay == NULL) {
-        printf("Error loading play button: %s\n", IMG_GetError());
-        return 1;
-    }
-    buttonOptions = IMG_Load("optionsr.png");
-    if (buttonOptions == NULL) {
-        printf("Error loading options button: %s\n", IMG_GetError());
-        return 1;
-    }
-    buttonScores = IMG_Load("scoresr.png");
-    if (buttonScores == NULL) { 
-        printf("Error loading scores button: %s\n", IMG_GetError());
-        return 1;
-    }
-    buttonQuit = IMG_Load("quitr.png");
-    if (buttonQuit == NULL) {
-        printf("Error loading quit button: %s\n", IMG_GetError());
+    // Load hit sound
+    hitSound = Mix_LoadWAV("fight.wav");
+    if (!hitSound) {
+        printf("Error loading hit sound: %s\n", Mix_GetError());
+        SDL_FreeSurface(background);
+        TTF_CloseFont(font);
+        SDL_Quit();
+        TTF_Quit();
+        IMG_Quit();
+        Mix_CloseAudio();
         return 1;
     }
 
-    logoRect.x = 525; logoRect.y = 110;
-    buttonPlayRect.x = 530; buttonPlayRect.y = 235;
-    buttonOptionsRect.x = 525; buttonOptionsRect.y = 270;
-    buttonScoresRect.x = 525; buttonScoresRect.y = 300;
-    buttonQuitRect.x = 535; buttonQuitRect.y = 330;
-    
-    // Fix de la taille du bouton Quit
-    buttonQuitRect.w = buttonQuit->w;
-    buttonQuitRect.h = buttonQuit->h;
+    // Initialize enemy
+    Ennemi enemy;
+    if (initEnnemi(&enemy, 700 - 80, 10, "Nmove.png", "Nhurt.png", "Nattack.png", "Ntrans.png") != 0) {
+        printf("Failed to initialize enemy\n");
+        SDL_FreeSurface(background);
+        Mix_FreeChunk(hitSound);
+        TTF_CloseFont(font);
+        SDL_Quit();
+        TTF_Quit();
+        IMG_Quit();
+        Mix_CloseAudio();
+        return 1;
+    }
 
-    // Boucle principale
-    while (!quit) {
-        SDL_Event event;
+    int running = 1;
+    SDL_Event event;
+    Uint32 lastTime = SDL_GetTicks();
+    int direction = 1;
+    int shotsFired = 0;
+    int enemyAlive = 1;
+    int deathAnimationPlayed = 0;
+
+    // Load weapon spritesheet
+    SDL_Surface *weapon = IMG_Load("Attack.png");
+    if (!weapon) {
+        printf("Error loading weapon spritesheet: %s\n", IMG_GetError());
+        SDL_FreeSurface(background);
+        SDL_FreeSurface(enemy.moveSpritesheet);
+        SDL_FreeSurface(enemy.hurtSpritesheet);
+        SDL_FreeSurface(enemy.attackSpritesheet);
+        SDL_FreeSurface(enemy.deathSpritesheet);
+        Mix_FreeChunk(hitSound);
+        TTF_CloseFont(font);
+        SDL_Quit();
+        TTF_Quit();
+        IMG_Quit();
+        Mix_CloseAudio();
+        return 1;
+    }
+
+    SDL_Rect weaponPos = {10, 380 - weapon->h, 0, 0};
+    int weaponFrame = 0;
+    int weaponAnimSpeed = 50;
+    Uint32 weaponLastTime = SDL_GetTicks();
+    int weaponAnimState = 0;
+
+    while (running) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
-                quit = 1;
-            } 
-            else if (event.type == SDL_MOUSEBUTTONDOWN) {
-                int x, y;
-                SDL_GetMouseState(&x, &y);
-                
-                // Vérifie si le bouton "Quit" a été cliqué
-                if (x >= buttonQuitRect.x && x <= (buttonQuitRect.x + buttonQuit->w) &&
-                    y >= buttonQuitRect.y && y <= (buttonQuitRect.y + buttonQuit->h)) {
-                    quit = 1;
+                running = 0;
+            }
+            handleWeaponAction(&event, &enemy, weapon, &weaponPos, &weaponFrame, &weaponAnimState, 
+                               &shotsFired, &enemyAlive, hitSound); // Pass hitSound
+        }
+
+        if (enemyAlive) {
+            enemy.position.y += direction * MOVE_SPEED;
+            if (enemy.position.y <= 0) {
+                enemy.position.y = 0;
+                direction = 1;
+            } else if (enemy.position.y >= 600 - enemy.frame.h) {
+                enemy.position.y = 600 - enemy.frame.h;
+                direction = -1;
+            }
+
+            if (enemy.state == STATE_HURT) {
+                if (SDL_GetTicks() - lastTime > HURT_ANIMATION_INTERVAL) {
+                    updateEnnemiAnimation(&enemy);
+                    lastTime = SDL_GetTicks();
+                }
+            } else {
+                if (SDL_GetTicks() - lastTime > ANIMATION_INTERVAL) {
+                    updateEnnemiAnimation(&enemy);
+                    lastTime = SDL_GetTicks();
+                }
+            }
+
+            if (weaponAnimState == 1) {
+                if ((Uint32)(SDL_GetTicks() - weaponLastTime) > (Uint32)weaponAnimSpeed) {
+                    weaponFrame = (weaponFrame + 1) % 7;
+                    weaponLastTime = SDL_GetTicks();
+                    if (weaponFrame == 6) {
+                        weaponAnimState = 2;
+                    }
+                }
+            } else if (weaponAnimState == 2) {
+                if ((Uint32)(SDL_GetTicks() - weaponLastTime) > (Uint32)weaponAnimSpeed) {
+                    weaponFrame = 0;
+                    weaponLastTime = SDL_GetTicks();
+                    weaponAnimState = 0;
+                }
+            }
+        } else if (enemy.state == STATE_DEATH && !deathAnimationPlayed) {
+            if (SDL_GetTicks() - lastTime > DEATH_ANIMATION_INTERVAL) {
+                updateEnnemiAnimation(&enemy);
+                lastTime = SDL_GetTicks();
+                if (enemy.currentFrame >= enemy.deathFrames - 1) {
+                    deathAnimationPlayed = 1;
                 }
             }
         }
 
-        // Dessin du menu
+        SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0, 0, 0));
         SDL_BlitSurface(background, NULL, screen, NULL);
-        SDL_BlitSurface(buttonPlay, NULL, screen, &buttonPlayRect);
-        SDL_BlitSurface(buttonOptions, NULL, screen, &buttonOptionsRect);
-        SDL_BlitSurface(buttonScores, NULL, screen, &buttonScoresRect);
-        SDL_BlitSurface(buttonQuit, NULL, screen, &buttonQuitRect);
-        SDL_BlitSurface(logo, NULL, screen, &logoRect);
 
-        // Mise à jour de l'écran
+        if (enemyAlive || (enemy.state == STATE_DEATH && !deathAnimationPlayed)) {
+            renderEnnemi(screen, &enemy);
+        }
+
+        if (weapon != NULL) {
+            SDL_Rect weaponFrameRect = {weaponFrame * (weapon->w / 7), 0, weapon->w / 7, weapon->h};
+            SDL_BlitSurface(weapon, &weaponFrameRect, screen, &weaponPos);
+        }
+
+        updateEnemyHealth(screen, &enemy, font);
+
         SDL_Flip(screen);
-        SDL_Delay(16); // Délai pour rendre l'affichage plus fluide
+        SDL_Delay(16);
     }
 
-    // Libération des ressources
+    // Free resources
     SDL_FreeSurface(background);
-    SDL_FreeSurface(buttonPlay);
-    SDL_FreeSurface(buttonOptions);
-    SDL_FreeSurface(buttonScores);
-    SDL_FreeSurface(buttonQuit);
+    SDL_FreeSurface(enemy.moveSpritesheet);
+    SDL_FreeSurface(enemy.hurtSpritesheet);
+    SDL_FreeSurface(enemy.attackSpritesheet);
+    SDL_FreeSurface(enemy.deathSpritesheet);
+    SDL_FreeSurface(weapon);
+    Mix_FreeChunk(hitSound);
+    TTF_CloseFont(font);
     SDL_Quit();
-
+    TTF_Quit();
+    IMG_Quit();
+    Mix_CloseAudio();
     return 0;
 }

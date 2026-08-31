@@ -1,0 +1,7 @@
+lot 3 : ennemi
+1- initialiser et afficher ennemi + ES (level1/level2)
+2- deplacement aleatoire (2 trajectoires selon le niveau du jeu : level 1 et level2)
+3- animation ennemi ( se deplacer , attaquer)
+4- collision bb (joueur/ennemi) + collision BB (joueur + ES)
+5- gestion de la sante (vivant , blesse , neutralise) pour l'ennemi et affichage 
+6- deplacement avec IA
