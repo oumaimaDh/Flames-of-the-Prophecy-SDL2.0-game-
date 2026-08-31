@@ -1,24 +1,21 @@
-# Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -g $(shell sdl-config --cflags)
-LDFLAGS = $(shell sdl-config --libs) -lSDL_image -lSDL_mixer -lSDL_ttf -lm
+CFLAGS = -Wall -Wextra -g -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT
+LDFLAGS = -L/usr/lib/x86_64-linux-gnu -lSDL -lSDL_image -lSDL_mixer -lSDL_ttf -lm
+OBJECTS = main.o source.o
+TARGET = game
 
-# Sources and output
-SRC = main.c source.c
-OBJ = $(SRC:.c=.o)
-EXEC = game
+all: $(TARGET)
 
-# Default target
-all: $(EXEC)
+$(TARGET): $(OBJECTS)
+	$(CC) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 
-$(EXEC): $(OBJ)
-	$(CC) -o $@ $^ $(LDFLAGS)
+main.o: main.c
+	$(CC) -c main.c -o main.o $(CFLAGS)
 
-%.o: %.c
-	$(CC) -c $< -o $@ $(CFLAGS)
+source.o: source.c
+	$(CC) -c source.c -o source.o $(CFLAGS)
 
 clean:
-	rm -f $(OBJ) $(EXEC)
+	rm -f $(OBJECTS) $(TARGET)
 
-re: clean all
-
+.PHONY: all clean
